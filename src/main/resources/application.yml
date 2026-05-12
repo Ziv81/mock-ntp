@@ -1,0 +1,8 @@
+spring:
+  main:
+    web-application-type: none
+
+mock:
+  ntp:
+    port: 123
+    fixed-time: 2026-01-01T00:00:00Z

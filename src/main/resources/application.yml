@@ -5,4 +5,5 @@ spring:
 mock:
   ntp:
     port: 123
-    fixed-time: 2026-01-01T00:00:00Z
+    start-time: 2026-05-12T22:00:00Z
+    end-time: 2026-05-12T23:05:00Z

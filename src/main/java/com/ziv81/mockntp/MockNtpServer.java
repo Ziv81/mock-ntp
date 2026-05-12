@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -22,6 +24,8 @@ public class MockNtpServer implements SmartLifecycle {
     private volatile boolean running;
     private volatile DatagramSocket socket;
     private volatile ExecutorService executor;
+    private volatile long startedAtNanos;
+    private volatile Instant cycleStartTime;
 
     public MockNtpServer(MockNtpProperties properties) {
         this.properties = properties;
@@ -32,9 +36,7 @@ public class MockNtpServer implements SmartLifecycle {
         if (running) {
             return;
         }
-        if (properties.getFixedTime() == null) {
-            throw new IllegalStateException("mock.ntp.fixed-time must be configured");
-        }
+        properties.validate();
 
         try {
             socket = new DatagramSocket(properties.getPort());
@@ -46,9 +48,11 @@ public class MockNtpServer implements SmartLifecycle {
         executor = Executors.newSingleThreadExecutor(runnable -> {
             return new Thread(runnable, "mock-ntp-server");
         });
+        startedAtNanos = System.nanoTime();
+        cycleStartTime = properties.getStartTime();
         running = true;
         executor.submit(this::listen);
-        logger.info("Mock NTP server listening on UDP port {} with fixed time {}", socket.getLocalPort(), properties.getFixedTime());
+        logger.info("Mock NTP server listening on UDP port {} with {}", socket.getLocalPort(), describeTimeBehavior());
     }
 
     private void listen() {
@@ -57,7 +61,14 @@ public class MockNtpServer implements SmartLifecycle {
                 byte[] requestBuffer = new byte[256];
                 DatagramPacket request = new DatagramPacket(requestBuffer, requestBuffer.length);
                 socket.receive(request);
-                byte[] responseBuffer = NtpPacketCodec.createResponse(request.getData(), request.getLength(), properties.getFixedTime());
+                Instant responseTime = currentResponseTime();
+                System.out.printf(
+                        "Received NTP request from %s:%d length=%d responding-time=%s%n",
+                        request.getAddress().getHostAddress(),
+                        request.getPort(),
+                        request.getLength(),
+                        responseTime);
+                byte[] responseBuffer = NtpPacketCodec.createResponse(request.getData(), request.getLength(), responseTime);
                 DatagramPacket response = new DatagramPacket(responseBuffer, responseBuffer.length, request.getAddress(), request.getPort());
                 socket.send(response);
             }
@@ -88,6 +99,8 @@ public class MockNtpServer implements SmartLifecycle {
             executor.shutdownNow();
             executor = null;
         }
+        startedAtNanos = 0L;
+        cycleStartTime = null;
     }
 
     @Override
@@ -98,5 +111,25 @@ public class MockNtpServer implements SmartLifecycle {
     int getLocalPort() {
         DatagramSocket currentSocket = socket;
         return currentSocket == null ? -1 : currentSocket.getLocalPort();
+    }
+
+    private String describeTimeBehavior() {
+        if (properties.usesFixedTime()) {
+            return "fixed time " + properties.getFixedTime();
+        }
+        return "cycling time range " + properties.getStartTime() + " to " + properties.getEndTime();
+    }
+
+    private Instant currentResponseTime() {
+        if (properties.usesFixedTime()) {
+            return properties.getFixedTime();
+        }
+        return resolveResponseTime(cycleStartTime, properties.getCycleDuration(), System.nanoTime() - startedAtNanos);
+    }
+
+    static Instant resolveResponseTime(Instant cycleStartTime, Duration cycleDuration, long elapsedNanos) {
+        long cycleNanos = cycleDuration.toNanos();
+        long normalizedElapsed = Math.floorMod(elapsedNanos, cycleNanos);
+        return cycleStartTime.plusNanos(normalizedElapsed);
     }
 }

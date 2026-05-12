@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 
@@ -52,5 +53,64 @@ class MockNtpServerTest {
         finally {
             server.stop();
         }
+    }
+
+    @Test
+    void resolvesCyclingTimeWithinConfiguredRange() {
+        Instant startTime = Instant.parse("2026-05-12T00:00:00Z");
+        Duration cycleDuration = Duration.ofSeconds(10);
+
+        assertThat(MockNtpServer.resolveResponseTime(startTime, cycleDuration, 0L))
+                .isEqualTo(startTime);
+        assertThat(MockNtpServer.resolveResponseTime(startTime, cycleDuration, 3_000_000_000L))
+                .isEqualTo(startTime.plusSeconds(3));
+        assertThat(MockNtpServer.resolveResponseTime(startTime, cycleDuration, 12_000_000_000L))
+                .isEqualTo(startTime.plusSeconds(2));
+    }
+
+    @Test
+    void respondsWithCyclingTimeRange() throws Exception {
+        Instant startTime = Instant.parse("2026-05-12T00:00:00Z");
+        Instant endTime = startTime.plusSeconds(2);
+        Instant clientTime = Instant.parse("2025-01-01T00:00:00Z");
+
+        MockNtpProperties properties = new MockNtpProperties();
+        properties.setPort(0);
+        properties.setStartTime(startTime);
+        properties.setEndTime(endTime);
+
+        MockNtpServer server = new MockNtpServer(properties);
+        server.start();
+
+        try (DatagramSocket client = new DatagramSocket()) {
+            client.setSoTimeout(2_000);
+
+            Instant firstResponseTime = sendRequestAndReadTransmitTime(client, server.getLocalPort(), clientTime);
+            Thread.sleep(1_100);
+            Instant secondResponseTime = sendRequestAndReadTransmitTime(client, server.getLocalPort(), clientTime);
+
+            assertThat(firstResponseTime).isBetween(startTime, endTime);
+            assertThat(secondResponseTime).isBetween(startTime, endTime);
+            assertThat(secondResponseTime).isAfter(firstResponseTime);
+        }
+        finally {
+            server.stop();
+        }
+    }
+
+    private static Instant sendRequestAndReadTransmitTime(DatagramSocket client, int serverPort, Instant clientTime) throws Exception {
+        byte[] request = new byte[48];
+        request[0] = 0x1B;
+        request[2] = 6;
+        byte[] clientTimestamp = NtpPacketCodec.toTimestampBytes(clientTime);
+        System.arraycopy(clientTimestamp, 0, request, 40, 8);
+
+        DatagramPacket outbound = new DatagramPacket(request, request.length, InetAddress.getLoopbackAddress(), serverPort);
+        client.send(outbound);
+
+        byte[] response = new byte[48];
+        DatagramPacket inbound = new DatagramPacket(response, response.length);
+        client.receive(inbound);
+        return NtpPacketCodec.readTimestamp(response, 40);
     }
 }

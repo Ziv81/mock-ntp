@@ -53,8 +53,6 @@ class MockNtpServerTest {
             assertThat(NtpPacketCodec.readTimestamp(response, 16)).isEqualTo(fixedTime.minusSeconds(2));
             assertThat(NtpPacketCodec.readTimestamp(response, 32)).isEqualTo(fixedTime.minusSeconds(1));
             assertThat(NtpPacketCodec.readTimestamp(response, 40)).isEqualTo(fixedTime);
-            assertThat(NtpPacketCodec.readTimestamp(response, 16)).isBefore(NtpPacketCodec.readTimestamp(response, 32));
-            assertThat(NtpPacketCodec.readTimestamp(response, 32)).isBeforeOrEqualTo(NtpPacketCodec.readTimestamp(response, 40));
         }
         finally {
             server.stop();

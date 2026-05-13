@@ -23,10 +23,7 @@ final class NtpPacketCodec {
         response[3] = (byte) 0xEC;
         ByteBuffer.wrap(response, 4, 4).putInt(0x0000_0100);
         ByteBuffer.wrap(response, 8, 4).putInt(0x0000_0200);
-        response[12] = 0x7F;
-        response[13] = 0x00;
-        response[14] = 0x00;
-        response[15] = 0x01;
+        ByteBuffer.wrap(response, 12, 4).putInt(0x7F00_0001);
 
         byte[] referenceTimestamp = toTimestampBytes(fixedTime.minusSeconds(2));
         byte[] receiveTimestamp = toTimestampBytes(fixedTime.minusSeconds(1));

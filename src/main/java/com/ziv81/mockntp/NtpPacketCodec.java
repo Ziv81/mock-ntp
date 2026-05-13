@@ -1,14 +1,19 @@
 package com.ziv81.mockntp;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Arrays;
 
 final class NtpPacketCodec {
 
     private static final int NTP_PACKET_SIZE = 48;
     private static final long NTP_EPOCH_OFFSET_SECONDS = 2_208_988_800L;
+    // 16.16 fixed-point values for small, non-zero root delay/dispersion in server replies.
+    private static final int ROOT_DELAY_FIXED_POINT = 0x0000_0100;
+    private static final int ROOT_DISPERSION_FIXED_POINT = 0x0000_0200;
+    // Use slightly older reference/receive timestamps so response timing looks realistic.
+    private static final int REFERENCE_TIMESTAMP_OFFSET_SECONDS = 2;
+    private static final int RECEIVE_TIMESTAMP_OFFSET_SECONDS = 1;
+    private static final int REFERENCE_ID_LOCALHOST = 0x7F00_0001;
 
     private NtpPacketCodec() {
     }
@@ -20,16 +25,20 @@ final class NtpPacketCodec {
 
         byte[] response = new byte[NTP_PACKET_SIZE];
         response[0] = 0x24;
-        response[1] = 0x01;
+        response[1] = 0x02;
         response[2] = request[2];
         response[3] = (byte) 0xEC;
-        System.arraycopy("MOCK".getBytes(StandardCharsets.US_ASCII), 0, response, 12, 4);
+        ByteBuffer.wrap(response, 4, 4).putInt(ROOT_DELAY_FIXED_POINT);
+        ByteBuffer.wrap(response, 8, 4).putInt(ROOT_DISPERSION_FIXED_POINT);
+        ByteBuffer.wrap(response, 12, 4).putInt(REFERENCE_ID_LOCALHOST);
 
-        byte[] fixedTimestamp = toTimestampBytes(fixedTime);
-        System.arraycopy(fixedTimestamp, 0, response, 16, 8);
-        System.arraycopy(Arrays.copyOfRange(request, 40, 48), 0, response, 24, 8);
-        System.arraycopy(fixedTimestamp, 0, response, 32, 8);
-        System.arraycopy(fixedTimestamp, 0, response, 40, 8);
+        byte[] referenceTimestamp = toTimestampBytes(fixedTime.minusSeconds(REFERENCE_TIMESTAMP_OFFSET_SECONDS));
+        byte[] receiveTimestamp = toTimestampBytes(fixedTime.minusSeconds(RECEIVE_TIMESTAMP_OFFSET_SECONDS));
+        byte[] transmitTimestamp = toTimestampBytes(fixedTime);
+        System.arraycopy(referenceTimestamp, 0, response, 16, 8);
+        System.arraycopy(request, 40, response, 24, 8);
+        System.arraycopy(receiveTimestamp, 0, response, 32, 8);
+        System.arraycopy(transmitTimestamp, 0, response, 40, 8);
         return response;
     }
 

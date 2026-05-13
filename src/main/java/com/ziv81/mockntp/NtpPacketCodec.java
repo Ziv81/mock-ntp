@@ -7,6 +7,10 @@ final class NtpPacketCodec {
 
     private static final int NTP_PACKET_SIZE = 48;
     private static final long NTP_EPOCH_OFFSET_SECONDS = 2_208_988_800L;
+    private static final int ROOT_DELAY_FIXED_POINT = 0x0000_0100;
+    private static final int ROOT_DISPERSION_FIXED_POINT = 0x0000_0200;
+    private static final int REFERENCE_TIMESTAMP_OFFSET_SECONDS = 2;
+    private static final int RECEIVE_TIMESTAMP_OFFSET_SECONDS = 1;
 
     private NtpPacketCodec() {
     }
@@ -21,12 +25,12 @@ final class NtpPacketCodec {
         response[1] = 0x02;
         response[2] = request[2];
         response[3] = (byte) 0xEC;
-        ByteBuffer.wrap(response, 4, 4).putInt(0x0000_0100);
-        ByteBuffer.wrap(response, 8, 4).putInt(0x0000_0200);
+        ByteBuffer.wrap(response, 4, 4).putInt(ROOT_DELAY_FIXED_POINT);
+        ByteBuffer.wrap(response, 8, 4).putInt(ROOT_DISPERSION_FIXED_POINT);
         ByteBuffer.wrap(response, 12, 4).putInt(0x7F00_0001);
 
-        byte[] referenceTimestamp = toTimestampBytes(fixedTime.minusSeconds(2));
-        byte[] receiveTimestamp = toTimestampBytes(fixedTime.minusSeconds(1));
+        byte[] referenceTimestamp = toTimestampBytes(fixedTime.minusSeconds(REFERENCE_TIMESTAMP_OFFSET_SECONDS));
+        byte[] receiveTimestamp = toTimestampBytes(fixedTime.minusSeconds(RECEIVE_TIMESTAMP_OFFSET_SECONDS));
         byte[] transmitTimestamp = toTimestampBytes(fixedTime);
         System.arraycopy(referenceTimestamp, 0, response, 16, 8);
         System.arraycopy(request, 40, response, 24, 8);

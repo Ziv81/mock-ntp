@@ -7,10 +7,13 @@ final class NtpPacketCodec {
 
     private static final int NTP_PACKET_SIZE = 48;
     private static final long NTP_EPOCH_OFFSET_SECONDS = 2_208_988_800L;
+    // 16.16 fixed-point values for small, non-zero root delay/dispersion in server replies.
     private static final int ROOT_DELAY_FIXED_POINT = 0x0000_0100;
     private static final int ROOT_DISPERSION_FIXED_POINT = 0x0000_0200;
+    // Use slightly older reference/receive timestamps so response timing looks realistic.
     private static final int REFERENCE_TIMESTAMP_OFFSET_SECONDS = 2;
     private static final int RECEIVE_TIMESTAMP_OFFSET_SECONDS = 1;
+    private static final int REFERENCE_ID_LOCALHOST = 0x7F00_0001;
 
     private NtpPacketCodec() {
     }
@@ -27,7 +30,7 @@ final class NtpPacketCodec {
         response[3] = (byte) 0xEC;
         ByteBuffer.wrap(response, 4, 4).putInt(ROOT_DELAY_FIXED_POINT);
         ByteBuffer.wrap(response, 8, 4).putInt(ROOT_DISPERSION_FIXED_POINT);
-        ByteBuffer.wrap(response, 12, 4).putInt(0x7F00_0001);
+        ByteBuffer.wrap(response, 12, 4).putInt(REFERENCE_ID_LOCALHOST);
 
         byte[] referenceTimestamp = toTimestampBytes(fixedTime.minusSeconds(REFERENCE_TIMESTAMP_OFFSET_SECONDS));
         byte[] receiveTimestamp = toTimestampBytes(fixedTime.minusSeconds(RECEIVE_TIMESTAMP_OFFSET_SECONDS));

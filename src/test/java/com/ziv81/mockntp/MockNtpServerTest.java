@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -43,12 +44,17 @@ class MockNtpServerTest {
 
             assertThat(inbound.getLength()).isEqualTo(48);
             assertThat(response[0] & 0xFF).isEqualTo(0x24);
-            assertThat(response[1] & 0xFF).isEqualTo(1);
+            assertThat(response[1] & 0xFF).isEqualTo(2);
             assertThat(response[2] & 0xFF).isEqualTo(6);
+            assertThat(ByteBuffer.wrap(response, 4, 4).getInt()).isEqualTo(0x0000_0100);
+            assertThat(ByteBuffer.wrap(response, 8, 4).getInt()).isEqualTo(0x0000_0200);
+            assertThat(Arrays.copyOfRange(response, 12, 16)).isEqualTo(new byte[] { 0x7F, 0x00, 0x00, 0x01 });
             assertThat(Arrays.copyOfRange(response, 24, 32)).isEqualTo(clientTimestamp);
-            assertThat(NtpPacketCodec.readTimestamp(response, 16)).isEqualTo(fixedTime);
-            assertThat(NtpPacketCodec.readTimestamp(response, 32)).isEqualTo(fixedTime);
+            assertThat(NtpPacketCodec.readTimestamp(response, 16)).isEqualTo(fixedTime.minusSeconds(2));
+            assertThat(NtpPacketCodec.readTimestamp(response, 32)).isEqualTo(fixedTime.minusSeconds(1));
             assertThat(NtpPacketCodec.readTimestamp(response, 40)).isEqualTo(fixedTime);
+            assertThat(NtpPacketCodec.readTimestamp(response, 16)).isBefore(NtpPacketCodec.readTimestamp(response, 32));
+            assertThat(NtpPacketCodec.readTimestamp(response, 32)).isBeforeOrEqualTo(NtpPacketCodec.readTimestamp(response, 40));
         }
         finally {
             server.stop();
